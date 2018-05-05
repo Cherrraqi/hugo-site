@@ -1,16 +1,29 @@
-
-box: debian
+box: wercker/default
 build:
   steps:
-    - arjen/hugo-build:
-        version: "0.40"
+    - arjen/hugo-build@1.1.0:
+        version: 0.13
         theme: herring-cove
-        flags: --buildDrafts=true
+        flags: --buildDrafts=false
 deploy:
-  steps:
-    - install-packages:
-        packages: git ssh-client
-    - lukevivier/gh-pages@0.2.1:
-        token: $GIT_TOKEN
-        domain: hugo-wercker.ig.nore.me
-        basedir: public
+    steps:
+        - add-to-known_hosts:
+            hostname: $HOSTNAME
+        - mktemp:
+            envvar: PRIVATEKEY_PATH
+        - create-file:
+            name: write key
+            filename: $PRIVATEKEY_PATH
+            content: $WERCKER_PRIVATE
+            overwrite: true
+        - script:
+            name: remove old files
+            code: ssh -i $PRIVATEKEY_PATH -l root -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $HOSTNAME rm -rf /var/www/blog/*
+        - script:
+            name: transfer blog
+            code: |
+                scp -r -i $PRIVATEKEY_PATH public/* root@$HOSTNAME:/var/www/blog
+                ssh -i $PRIVATEKEY_PATH -l root -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $HOSTNAME chown -R www-data:www-data /var/www/
+        - script:
+            name: restart nginx
+            code: ssh -i $PRIVATEKEY_PATH -l root -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $HOSTNAME service nginx reload
